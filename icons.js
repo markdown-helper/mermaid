@@ -83,13 +83,13 @@ function registerMermaidIcons() {
         },
       },
       {
-        name: 'fa',
+        name: 'fas',
         loader: () => {
-          console.log("Fetching fa6 icon pack...");
-          return fetch('https://unpkg.com/@iconify-json/fa7-regular@1/icons.json')
+          console.log("Fetching FA7 solid icon pack...");
+          return fetch('https://unpkg.com/@iconify-json/fa7-solid@1/icons.json')
             .then((res) => res.json())
             .then((data) => {
-              console.log("FA6 icon pack fetched successfully.");
+              console.log("FA7 icon pack fetched successfully. Will be registered as 'fas:' icon");
               return data;
             });
         },
@@ -101,11 +101,31 @@ function registerMermaidIcons() {
   }
 }
 
+/**
+ * Dynamically adds a new <style> element to the document head with the specified CSS.
+ * Prevents adding duplicate styles by checking for an existing element with the given ID.
+ *
+ * @param {string} id The unique ID for the <style> element.
+ * @param {string} css The CSS content to be added.
+ */
+function addStyle(id, css) {
+  // Check if the style element already exists to prevent duplicates
+  if (document.getElementById(id)) {
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = id;
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+
 // --- Main execution flow ---
 // Do not use lazy loading
-// Load Font Awesome 6.5.1 CSS from a public CDN
+// Load Font Awesome 4 CSS from a public CDN
 loadCSS(
-  'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/css/all.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css',
 );
 
 // Load Mermaid.js conditionally based on the global 'mermaid' object
@@ -114,3 +134,11 @@ loadScript(
   registerMermaidIcons,
   'mermaid', // Check for the existence of `window.mermaid`
 );
+
+// Add paddedH style
+addStyle('paddedH', `
+  .paddedH {
+    padding: 0px 5px;
+    display: inline-block;
+  }
+`);
