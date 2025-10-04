@@ -74,7 +74,7 @@ function registerMermaidIcons() {
         name: 'logos',
         loader: () => {
           console.log("Fetching logos icon pack...");
-          return fetch('https://unpkg.com/@iconify-json/logos@1/icons.json')
+          return fetch('https://cdn.jsdelivr.net/npm/@iconify-json/logos@1/icons.json')
             .then((res) => res.json())
             .then((data) => {
               console.log("Logos icon pack fetched successfully.");
@@ -86,7 +86,7 @@ function registerMermaidIcons() {
         name: 'fas',
         loader: () => {
           console.log("Fetching FA7 solid icon pack...");
-          return fetch('https://unpkg.com/@iconify-json/fa7-solid@1/icons.json')
+          return fetch('https://cdn.jsdelivr.net/npm/@iconify-json/fa7-solid@1/icons.json')
             .then((res) => res.json())
             .then((data) => {
               console.log("FA7 icon pack fetched successfully. Will be registered as 'fas:' icon");
