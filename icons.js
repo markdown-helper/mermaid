@@ -69,7 +69,7 @@ function registerMermaidIcons() {
 document.addEventListener('DOMContentLoaded', () => {
   // Load Font Awesome 7 CSS from a public CDN
   loadCSS(
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.1.0/css/all.min.css',
+    'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/fontawesome.min.css',
   );
 
   // Load Mermaid.js conditionally based on the global 'mermaid' object
