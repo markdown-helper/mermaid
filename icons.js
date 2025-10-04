@@ -83,13 +83,13 @@ function registerMermaidIcons() {
         },
       },
       {
-        name: 'fa7',
+        name: 'fa',
         loader: () => {
-          console.log("Fetching fa7 icon pack...");
+          console.log("Fetching fa6 icon pack...");
           return fetch('https://unpkg.com/@iconify-json/fa7-regular@1/icons.json')
             .then((res) => res.json())
             .then((data) => {
-              console.log("FA7 icon pack fetched successfully.");
+              console.log("FA6 icon pack fetched successfully.");
               return data;
             });
         },
@@ -105,7 +105,7 @@ function registerMermaidIcons() {
 // Do not use lazy loading
 // Load Font Awesome 6.5.1 CSS from a public CDN
 loadCSS(
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+  'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6/css/all.min.css',
 );
 
 // Load Mermaid.js conditionally based on the global 'mermaid' object
