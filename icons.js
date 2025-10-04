@@ -1,4 +1,4 @@
-// --- Function to load an external script only once (refactored) ---
+// --- Function to load an external script only once ---
 const loadedScripts = {};
 
 function loadScript(src, callback, checkVariable) {
@@ -72,19 +72,30 @@ function registerMermaidIcons() {
     window.mermaid.registerIconPacks([
       {
         name: 'logos',
-        loader: () =>
-          fetch('https://unpkg.com/@iconify-json/logos@1/icons.json').then(
-            (res) => res.json(),
-          ),
+        loader: () => {
+          console.log("Fetching logos icon pack...");
+          return fetch('https://unpkg.com/@iconify-json/logos@1/icons.json')
+            .then((res) => res.json())
+            .then((data) => {
+              console.log("Logos icon pack fetched successfully.");
+              return data;
+            });
+        },
       },
       {
         name: 'fa7',
-        loader: () =>
-          fetch('https://unpkg.com/@iconify-json/fa7-regular@1/icons.json').then(
-            (res) => res.json(),
-          ),
+        loader: () => {
+          console.log("Fetching fa7 icon pack...");
+          return fetch('https://unpkg.com/@iconify-json/fa7-regular@1/icons.json')
+            .then((res) => res.json())
+            .then((data) => {
+              console.log("FA7 icon pack fetched successfully.");
+              return data;
+            });
+        },
       },
-    ]);    
+    ]);
+    console.log("Icon packs registered with Mermaid.");
   } else {
     console.error("Mermaid object not found when trying to register icons.");
   }
@@ -92,9 +103,9 @@ function registerMermaidIcons() {
 
 // --- Main execution flow ---
 // Do not use lazy loading
-// Load Font Awesome 7 CSS from a public CDN
+// Load Font Awesome 6.5.1 CSS from a public CDN
 loadCSS(
-  'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/fontawesome.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
 );
 
 // Load Mermaid.js conditionally based on the global 'mermaid' object
