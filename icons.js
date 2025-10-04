@@ -138,7 +138,6 @@ loadScript(
 // Add paddedH style
 addStyle('paddedH', `
   .paddedH {
-    padding: 0px 5px;
-    display: inline-block;
+    padding: 0px 10px;
   }
 `);
