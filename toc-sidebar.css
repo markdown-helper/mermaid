@@ -1,0 +1,59 @@
+/* Minimal styles for the collapsible sidebar ToC added by toc-sidebar.js */
+/* Keep this minimal to avoid conflicting with existing page CSS */
+
+.md-toc a {
+  text-decoration: none;
+}
+
+.md-toc a.active {
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+/* Tidy up details/summary appearance */
+.md-toc details {
+  margin: 0;
+  padding: 0;
+}
+
+.md-toc details > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+  user-select: none;
+}
+
+.md-toc details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.md-toc summary a {
+  font-weight: inherit;
+}
+
+/* List spacing inside ToC */
+.md-toc ul {
+  margin: 2px 0 4px 0;
+  padding-left: 1rem;
+}
+
+.md-toc li {
+  margin: 0;
+  padding: 0;
+}
+
+/* Optional: subtle hover */
+.md-toc a:hover {
+  text-decoration: underline;
+}
+/* Toggle inline ToC visibility when sidebar ToC is shown */
+body[html-show-sidebar-toc] h2#daftar-isi,
+body[html-show-sidebar-toc] h2#daftar-isi + ul {
+  display: none !important;
+}
+
+/* Extra-specific selector for this document's export context */
+html body[for=html-export][html-show-sidebar-toc] h2#daftar-isi,
+html body[for=html-export][html-show-sidebar-toc] h2#daftar-isi + ul {
+  display: none !important;
+}

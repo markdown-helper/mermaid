@@ -340,6 +340,25 @@ function addStyle(id, css) {
 
 
 /**
+ * --- URL resolver helpers ---
+ * Resolve a URL relative to this script file (icons.js) rather than the HTML document.
+ */
+function resolveFromScript(url) {
+  try {
+    const current = document.currentScript && document.currentScript.src;
+    let base = current;
+    if (!base) {
+      const guessed = Array.from(document.scripts).find((s) => /(^|\/)icons\.js(\?|#|$)/.test(s.src));
+      base = guessed && guessed.src;
+    }
+    const finalBase = base || document.baseURI;
+    return new URL(url, finalBase).href;
+  } catch (_) {
+    return new URL(url, document.baseURI).href;
+  }
+}
+
+/**
  * --- Main execution flow ---
  * Ensures FA CSS present only if needed, then loads Mermaid and registers icons.
  */
@@ -366,3 +385,7 @@ addStyle('paddedH', `
   }
 `);
 */
+
+// Add ToC sidebar (paths resolved relative to this icons.js)
+loadCSS(resolveFromScript('./toc-sidebar.min.css'));
+loadScript(resolveFromScript('./toc-sidebar.min.js'));
