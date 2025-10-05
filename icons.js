@@ -1,104 +1,322 @@
-// --- Function to load an external script only once ---
+/**
+ * icons.js
+ *
+ * Responsibilities:
+ * - Conditionally load external assets (scripts, styles) in a robust, idempotent manner.
+ * - Detect if Font Awesome is already active and only add CSS when needed.
+ * - Register Iconify icon packs with Mermaid in a compact, maintainable way.
+ *
+ * Design notes:
+ * - URL normalization avoids duplicate loads caused by relative vs absolute paths.
+ * - Callbacks are queued while a given script is loading; they run once upon load.
+ * - Error handling keeps the page resilient if a remote pack or asset fails to load.
+ * - Mermaid icon registration is safe to call multiple times and includes lightweight logging.
+ */
 const loadedScripts = {};
 
+/**
+ * Load an external script exactly once with optional readiness check.
+ *
+ * Improvements:
+ * - Normalizes to an absolute URL to avoid duplicate loads caused by relative vs absolute href/src.
+ * - Deduplicates by both id and exact normalized src match.
+ * - Queues multiple callbacks while the same script is loading.
+ * - If checkVariable is provided and already present on window, the callback
+ *   is invoked asynchronously and no loading occurs.
+ *
+ * Note: checkVariable supports only top-level globals (e.g., 'mermaid').
+ *
+ * @param {string} src - The script URL to load.
+ * @param {Function} [callback] - Invoked after the script's load event.
+ * @param {string} [checkVariable] - Optional window global to short-circuit loading.
+ */
 function loadScript(src, callback, checkVariable) {
-  const scriptId = `script-loader-${src.replace(/[^a-zA-Z0-9]/g, '-')}`;
-  let scriptElement = document.getElementById(scriptId);
+  const absSrc = new URL(src, document.baseURI).href;
+  const scriptId = `script-loader-${absSrc.replace(/[^a-zA-Z0-9]/g, '-')}`;
+  const key = absSrc;
 
-  // Use a map to track loaded scripts more robustly and handle callbacks
-  if (!loadedScripts[src]) {
-    loadedScripts[src] = { element: null, callbacks: [] };
+  // Ensure state bucket for this src
+  if (!loadedScripts[key]) {
+    loadedScripts[key] = { element: null, callbacks: [] };
   }
 
-  // 1. Check if the script is already loaded and the global variable exists
+  // 1) If the global variable already exists, fire callback asynchronously and exit
   if (checkVariable && window[checkVariable]) {
-    if (callback) {
-      // Execute the callback asynchronously to prevent potential timing issues
-      setTimeout(callback, 0);
+    if (typeof callback === 'function') setTimeout(callback, 0);
+    return;
+  }
+
+  // 2) If we're already loading this src, just queue the callback
+  if (loadedScripts[key].element) {
+    if (typeof callback === 'function') {
+      loadedScripts[key].callbacks.push(callback);
     }
     return;
   }
 
-  // 2. Check if the script element is already being loaded
-  if (loadedScripts[src].element) {
-    if (callback) {
-      loadedScripts[src].callbacks.push(callback);
+  // 3) Check for an existing script element in the DOM (by id or identical normalized src)
+  const existingById = document.getElementById(scriptId);
+  const existingExact = document.querySelector(`script[src="${absSrc}"]`);
+  const existingByIter = existingExact || Array.from(document.scripts).find((s) => s.src === absSrc) || null;
+  const existing = existingById || existingByIter;
+
+  if (existing) {
+    loadedScripts[key].element = existing;
+
+    if (typeof callback === 'function') {
+      // If the global check is available, run immediately
+      if (checkVariable && window[checkVariable]) {
+        setTimeout(callback, 0);
+      } else {
+        // Otherwise, queue until the existing script reports 'load'
+        loadedScripts[key].callbacks.push(callback);
+        existing.addEventListener('load', () => {
+          const q = loadedScripts[key].callbacks.splice(0);
+          q.forEach((cb) => cb());
+        }, { once: true });
+        existing.addEventListener('error', () => {
+          console.error(`Failed loading script: ${absSrc}`);
+          loadedScripts[key].callbacks = [];
+        }, { once: true });
+      }
     }
+
+    // Fallback: if the script is already loaded and the global becomes available soon,
+    // flush queued callbacks on next tick.
+    setTimeout(() => {
+      if (checkVariable && window[checkVariable] && loadedScripts[key].callbacks.length) {
+        const q = loadedScripts[key].callbacks.splice(0);
+        q.forEach((cb) => cb());
+      }
+    }, 0);
+
     return;
   }
 
-  // 3. Script not loaded: Create and load the script
+  // 4) Create and load the script
   const script = document.createElement('script');
   script.id = scriptId;
-  script.src = src;
+  script.src = absSrc;
   script.defer = true;
 
-  // Use addEventListener to support multiple callbacks
-  const handleLoad = () => {
-    if (callback) {
-      callback();
-    }
-    loadedScripts[src].callbacks.forEach(cb => cb());
-    loadedScripts[src].callbacks = []; // Clear the queue
+  const onLoad = () => {
+    if (typeof callback === 'function') callback();
+    const q = loadedScripts[key].callbacks.splice(0);
+    q.forEach((cb) => cb());
   };
 
-  script.addEventListener('load', handleLoad);
+  const onError = (e) => {
+    console.error(`Error loading script ${absSrc}`, e);
+    loadedScripts[key].callbacks = [];
+  };
+
+  script.addEventListener('load', onLoad, { once: true });
+  script.addEventListener('error', onError, { once: true });
+
   document.head.appendChild(script);
-  loadedScripts[src].element = script;
+  loadedScripts[key].element = script;
 }
 
 
 // --- Function to load a CSS file only once ---
+/**
+ * Load a CSS stylesheet exactly once.
+ *
+ * Deduplicates by:
+ * - our generated element id, and
+ * - any existing link[rel="stylesheet"][href="normalized url"] in the document.
+ * Also cross-checks via element.href property to cover cases where href is normalized by the browser.
+ *
+ * @param {string} url - The stylesheet URL to load.
+ */
 function loadCSS(url) {
-  const linkId = `css-loader-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
+  const absHref = new URL(url, document.baseURI).href;
+  const linkId = `css-loader-${absHref.replace(/[^a-zA-Z0-9]/g, '-')}`;
 
-  if (document.getElementById(linkId)) {
-    return;
-  }
+  // Skip if our id already exists
+  if (document.getElementById(linkId)) return;
+
+  // Skip if an identical normalized href already exists (selector)
+  if (document.querySelector(`link[rel="stylesheet"][href="${absHref}"]`)) return;
+
+  // Skip if any existing link resolves to the same absolute href (property)
+  if (Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some((l) => l.href === absHref)) return;
 
   const link = document.createElement('link');
   link.id = linkId;
   link.rel = 'stylesheet';
-  link.href = url;
+  link.href = absHref;
   document.head.appendChild(link);
+}
+
+/**
+ * Detect whether a Font Awesome stylesheet is already active.
+ *
+ * Strategy:
+ * 1) Try document.fonts.check against known FA font-family names (v4, v5, v6).
+ * 2) Fallback: create an invisible element using common FA classes (fa/fas/far/fab)
+ *    and inspect computed font-family for FA signatures.
+ *
+ * This does not rely on specific link IDs and works even if FA was loaded elsewhere.
+ *
+ * @returns {boolean} true if Font Awesome appears to be loaded; false otherwise.
+ */
+function isFontAwesomeLoaded() {
+  const families = [
+    'FontAwesome',           // v4
+    'Font Awesome 5 Free',   // v5 Free
+    'Font Awesome 5 Brands', // v5 Brands
+    'Font Awesome 6 Free',   // v6 Free
+    'Font Awesome 6 Brands', // v6 Brands
+  ];
+
+  // 1) Prefer modern FontFaceSet when available
+  try {
+    if (document.fonts && typeof document.fonts.check === 'function') {
+      for (const fam of families) {
+        if (document.fonts.check(`1em "${fam}"`)) {
+          return true;
+        }
+      }
+    }
+  } catch (_) {
+    // Ignore any errors from fonts.check in older browsers
+  }
+
+  // 2) Fallback: test multiple FA classes to improve detection reliability across FA versions
+  const classesToTest = ['fa', 'fas', 'far', 'fab']; // v4/v5/v6 variants
+  const parent = document.body || document.documentElement;
+
+  for (const cls of classesToTest) {
+    const el = document.createElement('i');
+    el.className = cls;
+    el.style.position = 'absolute';
+    el.style.opacity = '0';
+    el.style.pointerEvents = 'none';
+    parent.appendChild(el);
+
+    const fontFamily = (window.getComputedStyle(el).fontFamily || '').toLowerCase();
+    parent.removeChild(el);
+
+    if (families.some((fam) => fontFamily.includes(fam.toLowerCase()))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // --- Your main functions ---
 
-// Function to register Iconify packs with Mermaid
+/**
+ * Build an Iconify pack descriptor for Mermaid.
+ * - name: The short pack name used in diagrams, e.g., 'logos', 'fa', 'fa7-solid'
+ * - pkg: The npm package under @iconify-json containing icons.json
+ *
+ * @param {string} name
+ * @param {string} pkg
+ * @returns {{name: string, loader: () => Promise<object>}}
+ */
+/**
+ * Resolve and fetch icons.json for an Iconify pack, with version negotiation.
+ *
+ * Not all @iconify-json packs publish the same major version. Many are at @1,
+ * but some may publish at @2 (or newer) depending on the collection. This helper:
+ * - Tries specific majors (e.g., @1, @2) and finally falls back to the unpinned latest (no @major),
+ * - Caches per package+version-candidate list to avoid repeated network fetches.
+ *
+ * This avoids hardcoding '@1' so packs that publish at '@2' or newer still work.
+ */
+const iconsJsonCache = new Map();
+
+/**
+ * @param {string} pkg - NPM package under @iconify-json (e.g., '@iconify-json/logos')
+ * @param {string[]} [versionCandidates=['1','2','']] - Major versions to try; '' means latest.
+ *   Note: Order reflects preference for stability first (@1), then newer (@2), then latest (no pin).
+ * @returns {Promise<object>} icons.json payload or {} on failure
+ */
+function fetchIconsJson(pkg, versionCandidates = ['1', '2', '']) {
+  const cacheKey = `${pkg}|${versionCandidates.join(',')}`;
+  if (iconsJsonCache.has(cacheKey)) return iconsJsonCache.get(cacheKey);
+
+  const urls = versionCandidates.map((v) =>
+    v
+      ? `https://cdn.jsdelivr.net/npm/${pkg}@${v}/icons.json`
+      : `https://cdn.jsdelivr.net/npm/${pkg}/icons.json`
+  );
+
+  const promise = (async () => {
+    for (const url of urls) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        return await res.json();
+      } catch (_) {
+        // Try next candidate
+      }
+    }
+    throw new Error(`Unable to fetch icons.json for ${pkg} from: ${urls.join(' | ')}`);
+  })().catch((err) => {
+    console.error(`Failed to fetch icon pack '${pkg}'`, err);
+    // Return empty object to keep registration robust if a single pack fails
+    return {};
+  });
+
+  iconsJsonCache.set(cacheKey, promise);
+  return promise;
+}
+
+/**
+ * Build an Iconify pack descriptor for Mermaid.
+ * Accepts optional versions override to pin preferred majors.
+ *
+ * Not all packs are '@1': some may publish '@2' or later. By default we try
+ * ['1','2',''] to prefer stability first, then newer majors, then latest.
+ * Override per pack if you want to prefer a different order, e.g. ['2','1',''].
+ *
+ * @param {string} name - Short pack name ('logos', 'fa', etc.)
+ * @param {string} pkg - '@iconify-json/<pack>'
+ * @param {{versions?: string[]}} [options] - e.g., { versions: ['2', '1', ''] }
+ * @returns {{name: string, loader: () => Promise<object>}}
+ */
+function buildIconPack(name, pkg, options = {}) {
+  const versions = options.versions || ['1', '2', '']; // stability-first default
+  return {
+    name,
+    loader: () => fetchIconsJson(pkg, versions),
+  };
+}
+
+/**
+ * Register Iconify icon packs with Mermaid.
+ * Idempotent: safe to call multiple times; Mermaid internally deduplicates by pack name.
+ */
 function registerMermaidIcons() {
-  if (window.mermaid) {
-    // 1. Register the icon packs
-    window.mermaid.registerIconPacks([
-      {
-        name: 'logos',
-        loader: () => {
-          console.log("Fetching logos icon pack...");
-          return fetch('https://cdn.jsdelivr.net/npm/@iconify-json/logos@1/icons.json')
-            .then((res) => res.json())
-            .then((data) => {
-              console.log("Logos icon pack fetched successfully.");
-              return data;
-            });
-        },
-      },
-      {
-        name: 'fas',
-        loader: () => {
-          console.log("Fetching FA7 solid icon pack...");
-          return fetch('https://cdn.jsdelivr.net/npm/@iconify-json/fa7-solid@1/icons.json')
-            .then((res) => res.json())
-            .then((data) => {
-              console.log("FA7 icon pack fetched successfully. Will be registered as 'fas:' icon");
-              return data;
-            });
-        },
-      },
-    ]);
-    console.log("Icon packs registered with Mermaid.");
-  } else {
-    console.error("Mermaid object not found when trying to register icons.");
+  if (!window.mermaid || typeof window.mermaid.registerIconPacks !== 'function') {
+    console.error("Mermaid object or registerIconPacks() not found when trying to register icons.");
+    return;
   }
+
+  // icones.js.org names: fa, fa7-solid, material-symbols, mdi, fluent
+  // Note on versions:
+  // - Many @iconify-json packs are published at @1.
+  // - Some collections may publish at @2 or newer.
+  // The builder below negotiates versions by default ['1','2',''] (stability-first).
+  // You can override per-pack with { versions: ['2','1',''] } to prefer newer majors.
+  const packs = [
+    buildIconPack('logos', '@iconify-json/logos'),              // default: ['1','2','']
+    buildIconPack('fa', '@iconify-json/fa'),                     // FA (legacy names) commonly @1
+    buildIconPack('fa7-solid', '@iconify-json/fa7-solid'),       // negotiates as needed
+    buildIconPack('mdi', '@iconify-json/mdi'),
+    buildIconPack('material-symbols', '@iconify-json/material-symbols'),
+    buildIconPack('fluent', '@iconify-json/fluent'),
+    // Examples (uncomment to include):
+    // buildIconPack('mdi', '@iconify-json/mdi', { versions: ['1', ''] }),
+    // buildIconPack('material-symbols', '@iconify-json/material-symbols', { versions: ['2', '1', ''] }),
+  ];
+
+  window.mermaid.registerIconPacks(packs);
+  console.log("Icon packs registered with Mermaid:", packs.map((p) => p.name).join(', '));
 }
 
 /**
@@ -121,23 +339,30 @@ function addStyle(id, css) {
 }
 
 
-// --- Main execution flow ---
-// Do not use lazy loading
-// Load Font Awesome 4 CSS from a public CDN
-loadCSS(
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css',
-);
+/**
+ * --- Main execution flow ---
+ * Ensures FA CSS present only if needed, then loads Mermaid and registers icons.
+ */
+const FA_CSS_URL = 'https://cdn.jsdelivr.net/npm/font-awesome@4/css/font-awesome.min.css';
+
+// Load Font Awesome CSS (only if not already applied)
+if (!isFontAwesomeLoaded()) {
+  loadCSS(FA_CSS_URL);
+}
 
 // Load Mermaid.js conditionally based on the global 'mermaid' object
 loadScript(
   'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js',
   registerMermaidIcons,
-  'mermaid', // Check for the existence of `window.mermaid`
+  'mermaid' // If Mermaid already exists, callback executes asynchronously
 );
 
-// Add paddedH style
+// Add paddedH style to fix label truncation issue.
+// Not used for now, padding set in mermaid init
+/*
 addStyle('paddedH', `
   .paddedH {
     padding-right: 10px;
   }
 `);
+*/
